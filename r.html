@@ -8,6 +8,7 @@ let builtin = [
   "function sub(a,b) { return a-b; }",
   "function add(a,b) { return a+b; }",
   "function mul(a,b) { return a*b; }",
+  "function pow(a,b) { return a**b; }",
 ];
 
 let builtinstr = builtin.join("\n");
@@ -268,6 +269,7 @@ function parse(source)
       [{type:"BuiltinFunction", name:"add", params:["a","b"]},
        {type:"BuiltinFunction", name:"sub", params:["a","b"]},
        {type:"BuiltinFunction", name:"mul", params:["a","b"]},
+       {type:"BuiltinFunction", name:"pow", params:["a","b"]},
      //{type:"BuiltinFunction", name:"eq" , params:["a","b"]},
      //{type:"BuiltinFunction", name:"tsb", params:["a","b"]},
      //{type:"BuiltinFunction", name:"div", params:["a","b"]}
@@ -381,7 +383,7 @@ else
   $source.textContent = `/*
 'r' is a subset of javascript
 only positive bigint literal, 'if else' and function calls are allowed
-'add' 'sub' and 'mul' functions are predefined
+'add' 'sub' 'mul' and 'pow' functions are predefined
 */
 function inc(a) { return add(a,1n); }
 function dec(a) { return sub(a,1n); }
@@ -411,12 +413,6 @@ function rem(a,b) { return tsb(a,mul(b,div(a,b))); }
 function isDivisible(a,b) { return isZero(rem(a,b)); }
 function isEven(a) { return isDivisible(a,2n); }
 function isOdd(a) { return not(isEven(a)); }
-function pow(a,b)
-{
-  if(eq(b,0n)) return 1n;
-  else if(eq(b,1n)) return a;
-  else return mul(a,pow(a,dec(b)));
-}
 function factorial(n)
 {
   if(eq(n,0n)) return 1n;
