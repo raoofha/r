@@ -1,0 +1,473 @@
+#!/usr/bin/node
+//; xterm-send "echo -ne \"\\033c\"; node $0 examples/ex1.js 5 2 3" ; exit 1 ;
+
+//<body><textarea id="source" style="width:100%; height:80%; white-space: nowrap;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><button id="runBtn">run</button><div id="output"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+
+let builtin = [
+  "process.on('exit', () => { try { let args = Array.from(Array(main.length).keys()).map((i)=> { try{ return BigInt(process.argv[i+2]) } catch(e) { return 0n; } }); console.log(main(...args)); } catch(e) { e?console.log('Unexpected runtime error: ' + e.message):console.log(e) ; } });",
+  "function sub(a,b) { return a-b; }",
+  "function add(a,b) { return a+b; }",
+  "function mul(a,b) { return a*b; }",
+];
+
+let builtinstr = builtin.join("\n");
+
+function parse(source)
+{
+  function readShebang(input)
+  {
+    if (input.startsWith("#!"))
+    {
+      let end = input.indexOf("\n", index);
+      if (end === -1) end = input.length;
+      return end;
+    }
+    return 0;
+  }
+
+  function skipSpace(input,index)
+  {
+    while (true)
+    {
+      const space = /[ \t\r\n]/.exec(input.slice(index));
+      const commentLine = /^\/\/[^\n\r]*/.exec(input.slice(index));
+      const commentBlock = /^\/\*(?:[^*]|\*(?!\/))*\*\//.exec(input.slice(index));
+      if (space && space.index === 0) index++;
+      else if (commentLine && commentLine.index === 0) index += commentLine[0].length;
+      else if (commentBlock && commentBlock.index === 0) index += commentBlock[0].length;
+      else return index;
+    }
+  }
+
+  function readIdentifier(input,index)
+  {
+    index = skipSpace(input,index);
+    const match = /^[_$a-zA-Z][_a-zA-Z0-9]*/.exec(input.slice(index));
+    if (match)
+    {
+      index += match[0].length;
+      return { type: "Identifier", name: match[0], index };
+    }
+    return { message: `Expected identifier`, index };
+  }
+
+  function readNumber(input,index)
+  {
+    index = skipSpace(input,index);
+    const match = /^0|[1-9][0-9]*/.exec(input.slice(index));
+    if (match)
+    {
+      index += match[0].length;
+      return { type: "number", value: match[0], index };
+    }
+    return {index};
+  }
+
+  function readBigInt(input,index)
+  {
+    const num = readNumber(input,index);
+    if (!num.type) return { message: `Expected number before 'n'`, index };
+    index = num.index;
+    if (input[index] === 'n')
+    {
+      index++;
+      return { type: "BigIntLiteral", value: num.value + 'n', index };
+    }
+    return { message: `Expected 'n' after number` , index };
+  }
+
+  function readExpression(input,index)
+  {
+    index = skipSpace(input,index);
+
+    if (input[index] === '(')
+    {
+      index++;
+      const expr = readExpression(input,index);
+      index = skipSpace(input,expr.index);
+      if (input[index] !== ')') return { message: `Expected ')'`, index };
+      index++;
+      return {...expr,index};
+    }
+
+    const id = readIdentifier(input,index);
+    if (id.message)
+    {
+      const bigint = readBigInt(input,index);
+      return bigint;
+    }
+
+    index = skipSpace(input,id.index);
+    if (input[index] === '(')
+    {
+      index++;
+      const args = [];
+      index = skipSpace(input,index);
+      if (input[index] !== ')')
+      {
+        while (true)
+        {
+          const arg = readExpression(input,index);
+          if (arg.message) return arg;
+          args.push(arg);
+          index = skipSpace(input,arg.index);
+          if (input[index] === ',')
+          {
+            index++;
+          }
+          else
+          {
+            break;
+          }
+        }
+      }
+      if (input[index] !== ')') return { message: `Expected ')'`, index };
+      index++;
+      return { type: "CallExpression", name: id.name, arguments: args, index };
+    }
+
+    return id;
+  }
+
+  function readReturnStatement(input,index)
+  {
+    index = skipSpace(input,index);
+    if (!input.startsWith("return", index)) return { message: `Expected 'return'`, index };
+    index += 6;
+    const expr = readExpression(input,index);
+    if (expr.message) return expr;
+    index = expr.index;
+    if (input[index] !== ';') return { message: `Expected ';'`, index };
+    index++;
+    return { type: "ReturnStatement", argument: expr, index };
+  }
+
+  function readIfStatement(input,index)
+  {
+    index = skipSpace(input,index);
+    if (!input.startsWith("if", index)) return { message: `Expected 'if'`, index };
+    index += 2;
+    index = skipSpace(input,index);
+    if (input[index] !== '(') return { message: `Expected '(' after 'if'`, index };
+    index++;
+    const test = readExpression(input,index);
+    index = skipSpace(input,test.index);
+    if (input[index] !== ')') return { message: `Expected ')' after condition`, index };
+    index++;
+    const then = readReturnStatement(input,index);
+    if (then.message) return then;
+    index = skipSpace(input,then.index);
+    if (!input.startsWith("else", index)) return { message: `Expected 'else'`, index };
+    index += 4;
+    index = skipSpace(input,index);
+    const _else = input.startsWith("if", index) ? readIfStatement(input,index) : readReturnStatement(input,index);
+    if(_else.message) return _else;
+    return {
+      type: "IfStatement",
+      test,
+      then,
+      _else: _else,
+      index:_else.index
+    };
+  }
+
+  function readFunction(input,index)
+  {
+    index = skipSpace(input,index);
+    if (!input.startsWith("function", index)) return { message: `Expected 'function'`, index };
+    index += 8;
+    const name = readIdentifier(input,index);
+    if (name.message) return name;
+    index = skipSpace(input,name.index);
+    if (input[index] !== '(') return { message: `Expected '('`, index };
+    index++;
+    const params = [];
+    index = skipSpace(input,index);
+    if (input[index] !== ')')
+    {
+      while (true)
+      {
+        const param = readIdentifier(input,index);
+        if (param.message) return param;
+        params.push(param.name);
+        index = skipSpace(input,param.index);
+        if (input[index] === ',')
+        {
+          index++;
+        }
+        else
+        {
+          break;
+        }
+      }
+    }
+    if (input[index] !== ')') return { message: `Expected ')' after parameters`, index };
+    index++;
+    index = skipSpace(input,index);
+    if (input[index] !== '{') return { message: `Expected '{'`, index };
+    index++;
+    index = skipSpace(input,index);
+    const body = input.startsWith("return", index) ? readReturnStatement(input,index) : readIfStatement(input,index);
+    if (body.message) return body;
+    index = skipSpace(input,body.index);
+    if (input[index] !== '}') return { message: `Expected '}'`, index };
+    index++;
+    return {
+      type: "FunctionDeclaration",
+      name: name.name,
+      params,
+      body,
+      index
+    };
+  }
+
+  function checkDefined(fs,f,node)
+  {
+    switch(node.type)
+    {
+      case 'BigIntLiteral': return true;
+      case 'Identifier': return (f.params.includes(node.name))? true:{message:"Undefined variable '" + node.name + "'", index:node.index};
+      case 'CallExpression':
+        if(!fs.find((e) => e.name == node.name)&&f.name!==node.name) return {message: "Undefined function '" + node.name + "'", index:node.index};
+        let cf = fs.find((e) => (e.name == node.name));
+        if( cf && cf.params.length !== node.arguments.length ) return {message: "Unexpected arity: function '" + node.name + "' expect " + cf.params.length + " arguments not " + node.arguments.length , index:node.index}
+        let cdefs = node.arguments.map((e) => checkDefined(fs,f,e));
+        for(let cdef of cdefs)
+        {
+          if(cdef.message) return cdef;
+        }
+        return true;
+      case 'ReturnStatement':
+        return checkDefined(fs,f,node.argument);
+      case 'IfStatement':
+        let c = checkDefined(fs,f,node.test);
+        if(c.message) return c;
+        c = checkDefined(fs,f,node.then);
+        if(c.message) return c;
+        c = checkDefined(fs,f,node._else);
+        if(c.message) return c;
+        return true;
+      case 'FunctionDeclaration':
+        if(fs.map((e) => e.name == node.name).includes(true)) return {message: "Function '" + node.name + "' is already defined", index:node.index};
+        return checkDefined(fs,f,node.body);
+      default:
+        throw new Error(`Unknown compiletime error: ${node.type}`);
+    }
+  }
+
+  function readProgram(input)
+  {
+    // ENTRY POINT
+    let index = 0;
+    index = readShebang(input);
+    index = skipSpace(input,index);
+    if(!input.startsWith(builtinstr,index)) return {message: "builtin functions must be defined first", index};
+    index += builtinstr.length;
+    index = skipSpace(input,index);
+    const functions = 
+      [{type:"BuiltinFunction", name:"add", params:["a","b"]},
+       {type:"BuiltinFunction", name:"sub", params:["a","b"]},
+       {type:"BuiltinFunction", name:"mul", params:["a","b"]},
+     //{type:"BuiltinFunction", name:"eq" , params:["a","b"]},
+     //{type:"BuiltinFunction", name:"tsb", params:["a","b"]},
+     //{type:"BuiltinFunction", name:"div", params:["a","b"]}
+      ];
+    while (input.startsWith("function", index))
+    {
+      const f = readFunction(input,index);
+      if (f.message) return f;
+      // check if function is defined before use
+      let c = checkDefined(functions,f,f);
+      if(c.message) return c;
+      functions.push(f);
+      index = skipSpace(input,f.index);
+    }
+    if (index !== input.length) return { message: `Unexpected input`, index };
+    return {
+      type: "Program",
+      functions,
+      builtin
+    };
+  }
+
+  function getLineAndColumn(input,index)
+  {
+    let src = input.substring(0,index+1);
+    let l = src.split('\n').length;
+    let c = src.length-src.lastIndexOf('\n')-1;
+    return [l,c];
+  }
+
+  let ast = readProgram(source);
+  if(ast.message) ast.lineandcolumn = getLineAndColumn(source,ast.index);
+  return ast;
+}
+
+function transpile(source)
+{
+  function numberOfVariables(ast)
+  {
+    function count(node)
+    {
+      switch (node.type)
+      {
+        case 'Program': 
+        {
+          return node.functions[node.functions.length-1]?.params.length||0;
+        }
+        case 'Identifier': return Number(node.name.substring(1));
+        case 'CallExpression':
+          if(node.name==="f") return node.arguments.length;
+          else return node.arguments.reduce((a,v)=>Math.max(a,count(v)),0);
+        case 'BigIntLiteral':
+        default: return 0;
+      }
+    }
+    return count(ast);
+  }
+
+  function r() { let p = r.caller; if(arguments.length!==p.length) throw new SyntaxError("function '" + p.name + "' expect " + p.arguments.length + " arguments not " + arguments.length); for(let i=0;i<arguments.length;i+=1) if(arguments[i]<0n) return 0n; let sw=1; for(let i=0;i<arguments.length;i+=1) if(arguments[i]<p.arguments[i]) sw=0; if(sw) throw undefined; return p(...arguments); }
+
+  function rewriteFunctionCalls(ast)
+  {
+    function toSource(node,fname)
+    {
+      switch (node.type)
+      {
+        case 'Program': 
+          return builtinstr+r.toString()+"\n"+node.functions.map(toSource).filter((e)=>e!=="").join('\n');
+        case 'BigIntLiteral': return node.value;
+        case 'Identifier': return node.name;
+        case 'CallExpression':
+          const args = node.arguments.map((e)=>toSource(e,fname)).join(', ');
+          if(node.name!==fname) return `${node.name}(${args})`;
+          return `r(${args})`;
+        case 'ReturnStatement':
+          return 'return ' + toSource(node.argument,fname) + ';'
+        case 'IfStatement':
+          return 'if(' + toSource(node.test,fname) + ') ' + toSource(node.then,fname) + ' else ' + toSource(node._else,fname);
+        case 'FunctionDeclaration':
+          return "function " + node.name + "(" + node.params + ")" + " { " + toSource(node.body,node.name) + " }" ;
+        case 'BuiltinFunction': 
+          return "";
+        default:
+          throw new Error(`Unknown compiletime error: ${node.type}`);
+      }
+    }
+
+    return toSource(ast);
+  }
+
+  let ast = parse(source);
+  if(ast.message) return ast;
+  return rewriteFunctionCalls(ast);
+}
+
+if(typeof(window)==="undefined") 
+{
+  let source = require("fs").readFileSync(process.argv[2],"utf8").toString();
+  let out = transpile(source);
+  if(out.message) console.log(out)
+  else 
+  {
+    process.argv.splice(2,1);
+    eval(out);
+  }
+}
+else 
+{
+  let $source = document.getElementById("source");
+  let $input = document.getElementById("input");
+  $source.textContent = `/*
+'r' is a subset of javascript
+only positive bigint literal, 'if else' and function calls are allowed
+'add' 'sub' and 'mul' functions are predefined
+*/
+function inc(a) { return add(a,1n); }
+function dec(a) { return sub(a,1n); }
+function tdec(a) { if(a) return sub(a,1n); else return 0n; }
+function not(a) { if(a) return 0n; else return 1n; }
+function isZero(a) { return not(a); }
+function isNonZero(a) { return not(isZero(a)); }
+function If(a,b,c) { return add(mul(isNonZero(a),b),mul(isZero(a),c)); }
+function eq(a,b) { return isZero(sub(a,b)); }
+function tsb(a,b) { if(eq(b,0n)) return a; else return tdec(tsb(a,tdec(b))); }
+function or(a,b) { return isNonZero(add(a,b)); }
+function and(a,b) { return isNonZero(mul(a,b)); }
+function notEq(a,b) { return not(eq(a,b)); }
+function lte(a,b) { return isZero(tsb(a,b)); }
+function lt(a,b) { return and(lte(a,b),notEq(a,b)); }
+function gt(a,b) { return not(lte(a,b)); }
+function gte(a,b) { return not(lt(a,b)); }
+function min(a,b) { if(lt(a,b)) return a; else return b; }
+function max(a,b) { if(lt(a,b)) return b; else return a; }
+function divhelper(n,d,b,q)
+{
+  if(lt(b,d)) return q;
+  else return divhelper(n,d,tsb(b,d),inc(q));
+}
+function div(a,b) { return divhelper(a,b,a,0n); }
+function rem(a,b) { return tsb(a,mul(b,div(a,b))); }
+function isDivisible(a,b) { return isZero(rem(a,b)); }
+function isEven(a) { return isDivisible(a,2n); }
+function isOdd(a) { return not(isEven(a)); }
+function pow(a,b)
+{
+  if(eq(b,0n)) return 1n;
+  else if(eq(b,1n)) return a;
+  else return mul(a,pow(a,dec(b)));
+}
+function factorial(n)
+{
+  if(eq(n,0n)) return 1n;
+  else return mul(n,factorial(dec(n)));
+}
+function hyp(n,a,b) 
+{ 
+  if(eq(n,0n)) return inc(b);
+  else if(eq(n,1n)) return add(a,b);
+  else if(eq(n,2n)) return mul(a,b);
+  else if(eq(n,3n)) return pow(a,b);
+  else if(and(gt(n,2n),eq(b,0n))) return 1n; 
+  else return hyp(dec(n),a,hyp(n,a,dec(b)));
+}
+function ack(m,n){ if(m) return tsb(hyp(m,2n,add(n,3n)),3n); else return inc(n); }
+
+function main(a,b) { return ack(a,b); }
+`;
+  $input.value = "4 1";
+  let $output = document.getElementById("output");
+  let $runBtn = document.getElementById("runBtn");
+  function run(e) 
+  {
+    let process = {on:()=>[]};
+    let source = builtinstr+$source.value;
+    let newsource = transpile(source);
+    if(typeof(newsource)==="object") 
+    {
+      let [l,c] = newsource.lineandcolumn;
+      $output.textContent = newsource.message + " at " + (l-builtin.length+1) + "," + c;
+    }
+    else 
+    {
+      let args = $input.value.split(" ").filter((e)=>e!=="").map((e)=> { try{ return BigInt(e); }catch(e){ return 0n; } });
+      let out;
+      try
+      {
+        out = eval(newsource+"main")(...args);
+      }
+      catch(e)
+      {
+        out = undefined;
+      }
+      $output.textContent = out; // (out<0n)?0n:out;
+    }
+  }
+  $runBtn.addEventListener("click",run);
+  $source.addEventListener("keydown",function(e) { if(e.keyCode == 13 && e.ctrlKey) { run(e); } });
+  $input.addEventListener("keydown",function(e) { if(e.keyCode == 13) { run(e); } });
+  run();
+    
+}
+
+//</script></body>
