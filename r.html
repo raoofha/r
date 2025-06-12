@@ -1,7 +1,7 @@
 #!/usr/bin/node
 //; xterm-send "echo -ne \"\\033c\"; node $0 examples/ex1.js 4 1 3" ; exit 1 ;
 
-//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: nowrap;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
 
 let builtin = 
 [
@@ -445,7 +445,7 @@ function main(a,b) { return ack(a,b); }
     if(typeof(newsource)==="object") 
     {
       let [l,c] = newsource.lineandcolumn;
-      $output.textContent = newsource.message + " at " + (l-builtin.length+1) + "," + c;
+      $output.textContent = "syntax error: " + newsource.message + " at " + (l-builtin.length+1) + "," + c;
     }
     else 
     {
@@ -459,7 +459,8 @@ function main(a,b) { return ack(a,b); }
       }
       catch(e)
       {
-        out = undefined;
+        if(e) out = "runtime error: " + e.message;
+        else out = undefined;
       }
       $output.textContent = out; // (out<0n)?0n:out;
     }
