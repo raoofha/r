@@ -1,5 +1,5 @@
 #!/usr/bin/node
-//; xterm-send "echo -ne \"\\033c\"; node $0 r.js 4 1" ; exit 1 ;
+//; xterm-send "echo -ne \"\\033c\"; node $0 r.js 2 0" ; exit 1 ;
 
 //<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
 
@@ -69,31 +69,6 @@ function parserReadIdentifier(input,index)
   return { message: `Expected identifier`, index };
 }
 
-function parserReadNumber(input,index)
-{
-  index = parserSkipSpace(input,index);
-  const match = /^0|[1-9][0-9]*/.exec(input.slice(index));
-  if (match)
-  {
-    index += match[0].length;
-    return { type: "number", value: match[0], index };
-  }
-  return {index};
-}
-
-function parserReadBigInt(input,index)
-{
-  const num = parserReadNumber(input,index);
-  if (!num.type) return { message: `Expected number before 'n'`, index };
-  index = num.index;
-  if (input[index] === 'n')
-  {
-    index++;
-    return { type: "BigIntLiteral", value: num.value + 'n', index };
-  }
-  return { message: `Expected 'n' after number` , index };
-}
-
 function parserReadExpression(input,index)
 {
   index = parserSkipSpace(input,index);
@@ -109,11 +84,6 @@ function parserReadExpression(input,index)
   }
 
   const id = parserReadIdentifier(input,index);
-  if (id.message)
-  {
-    const bigint = parserReadBigInt(input,index);
-    return bigint;
-  }
 
   index = parserSkipSpace(input,id.index);
   if (input[index] === '(')
@@ -160,35 +130,6 @@ function parserReadReturnStatement(input,index)
   return { type: "ReturnStatement", argument: expr, index };
 }
 
-function parserReadIfStatement(input,index)
-{
-  index = parserSkipSpace(input,index);
-  if (!input.startsWith("if", index)) return { message: `Expected 'if'`, index };
-  index += 2;
-  index = parserSkipSpace(input,index);
-  if (input[index] !== '(') return { message: `Expected '(' after 'if'`, index };
-  index++;
-  const test = parserReadExpression(input,index);
-  index = parserSkipSpace(input,test.index);
-  if (input[index] !== ')') return { message: `Expected ')' after condition`, index };
-  index++;
-  const then = parserReadReturnStatement(input,index);
-  if (then.message) return then;
-  index = parserSkipSpace(input,then.index);
-  if (!input.startsWith("else", index)) return { message: `Expected 'else'`, index };
-  index += 4;
-  index = parserSkipSpace(input,index);
-  const _else = input.startsWith("if", index) ? parserReadIfStatement(input,index) : parserReadReturnStatement(input,index);
-  if(_else.message) return _else;
-  return {
-    type: "IfStatement",
-    test,
-    then,
-    _else: _else,
-    index:_else.index
-  };
-}
-
 function parserReadFunction(input,index)
 {
   index = parserSkipSpace(input,index);
@@ -225,7 +166,7 @@ function parserReadFunction(input,index)
   if (input[index] !== '{') return { message: `Expected '{'`, index };
   index++;
   index = parserSkipSpace(input,index);
-  const body = input.startsWith("return", index) ? parserReadReturnStatement(input,index) : parserReadIfStatement(input,index);
+  const body = parserReadReturnStatement(input,index);
   if (body.message) return body;
   index = parserSkipSpace(input,body.index);
   if (input[index] !== '}') return { message: `Expected '}'`, index };
@@ -243,7 +184,6 @@ function parserCheckDefined(fs,f,node)
 {
   switch(node.type)
   {
-    case 'BigIntLiteral': return true;
     case 'Identifier': return (f.params.includes(node.name))? true:{message:"Undefined variable '" + node.name + "'", index:node.index};
     case 'CallExpression':
       if(!fs.find((e) => e.name == node.name)&&f.name!==node.name) return {message: "Undefined function '" + node.name + "'", index:node.index};
@@ -257,14 +197,6 @@ function parserCheckDefined(fs,f,node)
       return true;
     case 'ReturnStatement':
       return parserCheckDefined(fs,f,node.argument);
-    case 'IfStatement':
-      let c = parserCheckDefined(fs,f,node.test);
-      if(c.message) return c;
-      c = parserCheckDefined(fs,f,node.then);
-      if(c.message) return c;
-      c = parserCheckDefined(fs,f,node._else);
-      if(c.message) return c;
-      return true;
     case 'FunctionDeclaration':
       if(fs.map((e) => e.name == node.name).includes(true)) return {message: "Function '" + node.name + "' is already defined", index:node.index};
       return parserCheckDefined(fs,f,node.body);
@@ -281,13 +213,9 @@ function parserReadProgram(input)
   index = parserSkipSpace(input,index);
   const functions = 
     [{type:"", name:"inc", params:["a"]},
-     {type:"", name:"dec", params:["a"]},
      {type:"", name:"tsb", params:["a","b"]},
      {type:"", name:"add", params:["a","b"]},
      {type:"", name:"mul", params:["a","b"]},
-     {type:"", name:"div", params:["a","b"]},
-     {type:"", name:"pow", params:["a","b"]},
-     {type:"", name:"root",params:["a","b"]},
     ];
   while (input.startsWith("function", index))
   {
@@ -328,7 +256,6 @@ function rewriteFunctionCalls(node,fname)
   {
     case 'Program': 
       return node.functions.map(rewriteFunctionCalls).filter((e)=>e!=="").join('\n');
-    case 'BigIntLiteral': return node.value;
     case 'Identifier': return node.name;
     case 'CallExpression':
       const args = node.arguments.map((e)=>rewriteFunctionCalls(e,fname)).join(', ');
@@ -336,8 +263,6 @@ function rewriteFunctionCalls(node,fname)
       return `r(${args})`;
     case 'ReturnStatement':
       return 'return ' + rewriteFunctionCalls(node.argument,fname) + ';'
-    case 'IfStatement':
-      return 'if(' + rewriteFunctionCalls(node.test,fname) + ') ' + rewriteFunctionCalls(node.then,fname) + ' else ' + rewriteFunctionCalls(node._else,fname);
     case 'FunctionDeclaration':
       return "function " + node.name + "(" + node.params + ")" + " { " + rewriteFunctionCalls(node.body,node.name) + " }" ;
     case '': 
@@ -442,11 +367,20 @@ else
   let $source = document.getElementById("source");
   let $input = document.getElementById("input");
   $source.textContent = `/*
-  'r' is a subset of javascript
-  only positive bigint literal, 'if else' and function calls are allowed
-  'inc' 'dec' 'tsb' 'add' 'mul' 'div' 'pow' 'root' functions are predefined although 'inc' and 'dec' are enough to define the other ones
+  'r' is a subset of javascript, only function calls are allowed
+  'inc' 'tsb' 'add' 'mul' functions are predefined
 */
-function not(a) { if(a) return 0n; else return 1n; }
+function $0(a) { return tsb(a,a); }
+function $1(a) { return inc($0(a)); }
+function $2(a) { return inc($1(a)); }
+function $3(a) { return inc($2(a)); }
+function $4(a) { return inc($3(a)); }
+function $5(a) { return inc($4(a)); }
+function $6(a) { return inc($5(a)); }
+function $7(a) { return inc($6(a)); }
+function $8(a) { return inc($7(a)); }
+function dec(a) { return tsb(a,$1(a)); }
+function not(a) { return tsb($1(a),a); }
 function isZero(a) { return not(a); }
 function isNonZero(a) { return not(isZero(a)); }
 function If(a,b,c) { return add(mul(isNonZero(a),b),mul(isZero(a),c)); }
@@ -458,70 +392,32 @@ function lte(a,b) { return isZero(tsb(a,b)); }
 function lt(a,b) { return and(lte(a,b),notEq(a,b)); }
 function gt(a,b) { return not(lte(a,b)); }
 function gte(a,b) { return not(lt(a,b)); }
-function min(a,b) { if(lt(a,b)) return a; else return b; }
-function max(a,b) { if(lt(a,b)) return b; else return a; }
+function min(a,b) { return If(lt(a,b),a,b); }
+function max(a,b) { return If(lt(a,b),b,a); }
+function _div(b,n,d,q) { return If(lt(b,d),q,_div(tsb(b,d),n,d,inc(q))); }
+function div(a,b) { return _div(a,a,b,$0(a)); }
+function _pow(b,a) { return If(eq(b,$0(a)),$1(a),If(eq(b,$1(a)),a,mul(a,_pow(dec(b),a)))); }
+function pow(a,b) { return _pow(b,a); }
+function _root(n,a,b) { return If(not(tsb(pow(n,b),a)),n,_root(dec(n),a,b)); }
+function root(a,b) { return _root(a,a,b); }
+function factorial(n) { return If(eq(n,$0(n)),$1(n),mul(n,factorial(dec(n)))); }
+function _hyp(i,n,a,b) { return If(eq(n,$0(n)),inc(b),If(eq(n,$1(n)),add(a,b),If(eq(n,$2(n)),mul(a,b),If(eq(n,$3(n)),pow(a,b),If(and(gt(n,$2(n)),eq(b,$0(n))),$1(n),_hyp(dec(i),dec(n),a,_hyp(dec(i),n,a,dec(b)))))))); }
+function hyp(n,a,b) { return _hyp(mul(n,b),n,a,b); }
+function ack(m,n) { return If(m,tsb(hyp(m,$2(n),add(n,$3(n))),$3(n)),inc(n)); }
 function rem(a,b) { return tsb(a,mul(b,div(a,b))); }
 function isDivisible(a,b) { return isZero(rem(a,b)); }
-function isEven(a) { return isDivisible(a,2n); }
+function isEven(a) { return isDivisible(a,$2(a)); }
 function isOdd(a) { return not(isEven(a)); }
+function sum(a,b) { return div(mul(add(a,b),add(tsb(b,a),$1(a))),$2(a)); }
+function cantorPair(a,b) { return div(add(add(add(add(mul(a,a),a),mul($2(a),mul(a,b))),mul($3(a),b)),mul(b,b)),$2(a)); }
+function _cantorUnpairW(n) { return div(dec(root(add(mul($8(n),n),$1(n)),$2(n))),$2(n)); }
+function _cantorUnpairT(w) { return div(add(pow(w,$2(w)),w),$2(w)); }
+function cantorUnpairB(n) { return tsb(n,_cantorUnpairT(_cantorUnpairW(n))); }
+function cantorUnpairA(n) { return tsb(_cantorUnpairW(n),cantorUnpairB(n)); }
 
-function _mytsb(b,a)
-{
-  if(b) return dec(_mytsb(dec(b),a));
-  else return a;
-}
-function mytsb(a,b) { return _mytsb(b,a); }
-function myadd(a,b)
-{
-  if(a) return inc(myadd(dec(a),b));
-  else return b;
-}
-function mymul(a,b) 
-{ 
-  if(eq(a,0n)) return 0n;
-  else if(eq(a,1n)) return b;
-  else return add(b,mymul(dec(a),b));
-}
-function _mydiv(b,n,d,q) 
-{ 
-  if(lt(b,d)) return q;
-  else return _mydiv(tsb(b,d),n,d,inc(q)); 
-}
-function mydiv(a,b) { return _mydiv(a,a,b,0n); }
-function _mypow(b,a) 
-{ 
-  if(eq(b,0n)) return 1n;
-  else if(eq(b,1n)) return a;
-  else return mymul(a,_mypow(dec(b),a)); 
-}
-function mypow(a,b) { return _mypow(b,a); }
-function _myroot(n,a,b) 
-{
-  if(not(tsb(pow(n,b),a))) return n;
-  else return _myroot(dec(n),a,b); 
-}
-function myroot(a,b) { return _myroot(a,a,b); }
-
-function factorial(n)
-{
-  if(eq(n,0n)) return 1n;
-  else return mul(n,factorial(dec(n)));
-}
-function _hyp(i,n,a,b) 
-{
-  if(eq(n,0n)) return inc(b);
-  else if(eq(n,1n)) return add(a,b);
-  else if(eq(n,2n)) return mul(a,b);
-  else if(eq(n,3n)) return pow(a,b);
-  else if(and(gt(n,2n),eq(b,0n))) return 1n; 
-  else return _hyp(dec(i),dec(n),a,_hyp(dec(i),n,a,dec(b)));
-}
-function hyp(n,a,b) { return _hyp(mul(n,b),n,a,b); }
-function ack(m,n) { if(m) return tsb(hyp(m,2n,add(n,3n)),3n); else return inc(n); }
-
-function main(a,b) { return ack(a,b); }
+function main(a,b) { return pow(a,b); }
 `;
-  $input.value = "4 2";
+  $input.value = "4 4";
   let $output = document.getElementById("output");
   let $run = document.getElementById("run");
   let $livepreview = document.getElementById("livepreview");
