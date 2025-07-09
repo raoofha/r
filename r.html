@@ -3,7 +3,7 @@
 
 //<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
 
-function r() { if(!arguments.length||(r.caller.arguments[0]<=arguments[0])) throw 0n; return r.caller(...arguments); }
+function r() { if(!arguments.length||(r.caller.arguments[0]<=arguments[0])) return 0n; return r.caller(...arguments); }
 function inc(a) { return a+1n; }
 function dec(a) { return a?a-1n:0n; }
 
@@ -339,7 +339,7 @@ function rewriteFunctionCalls(node,fname)
     case 'IfStatement':
       return 'if(' + rewriteFunctionCalls(node.test,fname) + ') ' + rewriteFunctionCalls(node.then,fname) + ' else ' + rewriteFunctionCalls(node._else,fname);
     case 'FunctionDeclaration':
-      return "function " + node.name + "(" + node.params + ")" + " { try {" + rewriteFunctionCalls(node.body,node.name) + "} catch(e) { if(e) throw e; else return 0n; } }" ;
+      return "function " + node.name + "(" + node.params + ")" + " { " + rewriteFunctionCalls(node.body,node.name) + " }" ;
     case '': 
       return "";
     default:
@@ -372,7 +372,8 @@ function evl(src,args)
     }
     catch(e)
     {
-      return "runtime error: " + e.message;
+      if(e) return('Unexpected runtime error: ' + e.message);
+      else return(e);
     }
   }
 }
@@ -433,8 +434,7 @@ if(typeof(window)==="undefined")
   }
   catch(e)
   {
-    if(e) console.log('Unexpected runtime error: ' + e.message);
-    else console.log(e);
+    console.log('runtime error: ' + e.message);
   }
 }
 else 
