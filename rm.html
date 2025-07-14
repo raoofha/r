@@ -147,7 +147,7 @@ function evl(src,args)
       {
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
-        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return 0n; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
+        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
       }
       i+=1n;
     }
@@ -223,7 +223,7 @@ else
 ifj 0 4 // if(a) 
 ifj 1 7
 inc 2
-ifj 2 3
+ifj 2 10
 dec 0   // dec(a)
 inc 1   // inc(b)
 ifj 0 4 // if(a) return add(dec(a),inc(b))
