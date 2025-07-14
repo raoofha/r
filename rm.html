@@ -1,7 +1,7 @@
 #!/usr/bin/node
-//; xterm-send "echo -ne \"\\033c\"; node $0 rm.rm 4 1" ; exit 1 ;
+//; xterm-send "echo -ne \"\\033c\"; node $0 rm.rm 4 2" ; exit 1 ;
 
-//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><input type="text" id="input" placeholder="main arguments e.g. arg1 arg2 arg3 ..." style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><input type="text" id="input" placeholder="r0 r1 r2 ... // registers initial values" style="width:100%; height:auto;"></input><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
 
 function parserReadShebang(input)
 {
@@ -109,7 +109,6 @@ function evl0(src,args)
   }
   else
   {
-    if(!args.length) { return "runtime error: no arguments"; }
     let regs = args;
     let i=0n;
     while(i<ast.instructions.length)
@@ -137,7 +136,6 @@ function evl(src,args)
   }
   else
   {
-    if(!args.length) { return "runtime error: no arguments"; }
     let regs = args;
     let i=0n;
     let oldregs=[...regs];
@@ -149,7 +147,7 @@ function evl(src,args)
       {
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
-        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return regs[0]; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
+        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return 0n; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
       }
       i+=1n;
     }
@@ -222,17 +220,18 @@ else
   let $input = document.getElementById("input");
   $source.textContent = `// r0=r0+r1
 // function add(a,b) { if(a) return add(dec(a),inc(b)); else return b; }
-ifj 0 3 // if(a) 
+ifj 0 4 // if(a) 
+ifj 1 7
 inc 2
-ifj 2 6
+ifj 2 3
 dec 0   // dec(a)
 inc 1   // inc(b)
-ifj 0 3 // if(a) return add(dec(a),inc(b))
+ifj 0 4 // if(a) return add(dec(a),inc(b))
 dec 1   // return b
 inc 0
-ifj 1 6
+ifj 1 7
 `;
-  $input.value = "4 1";
+  $input.value = "4 2";
   let $output = document.getElementById("output");
   let $run = document.getElementById("run");
   let $livepreview = document.getElementById("livepreview");
