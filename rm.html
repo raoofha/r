@@ -144,11 +144,12 @@ function evl(src,args)
     while(i<ast.instructions.length)
     {
       let inst = ast.instructions[i]; 
+      //console.log(i,inst.name,regs,oldregs);
       switch(inst.name)
       {
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
-        case "ifj": if(regs[inst.op1]) { if(inst.op2<=i&&oldregs[inst.op1]<regs[inst.op1]) return regs[0]; oldregs = [...regs]; i = inst.op2; continue; }
+        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return regs[0]; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
       }
       i+=1n;
     }
