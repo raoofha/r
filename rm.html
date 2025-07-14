@@ -43,7 +43,7 @@ function parserReadNumber(input,index)
 function parserReadInstruction(input,index)
 {
   index = parserSkipSpace(input,index);
-  if (!(input.startsWith("inc", index)||input.startsWith("dec", index)||input.startsWith("ifj", index))) return {message: `Expected 'inc' 'dec' or 'ifj'`, index};
+  if (!(input.startsWith("inc", index)||input.startsWith("dec", index)||input.startsWith("ifj", index))) return {message: `expect 'inc' 'dec' or 'ifj'`, index};
   const name = input.substring(index,index+3);
   index += 3;
   let op1 = parserReadNumber(input,index);
