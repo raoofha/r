@@ -43,14 +43,14 @@ function parserReadNumber(input,index)
 function parserReadInstruction(input,index)
 {
   index = parserSkipSpace(input,index);
-  if (!(input.startsWith("inc", index)||input.startsWith("dec", index)||input.startsWith("ifj", index))) return {message: `expect 'inc' 'dec' or 'ifj'`, index};
+  if (!(input.startsWith("inc", index)||input.startsWith("dec", index)||input.startsWith("jnz", index))) return {message: `expect 'inc' 'dec' or 'jnz'`, index};
   const name = input.substring(index,index+3);
   index += 3;
   let op1 = parserReadNumber(input,index);
   if (op1.message) return op1;
   index = parserSkipSpace(input,op1.index);
   let op2;
-  if(name==="ifj")
+  if(name==="jnz")
   {
     op2 = parserReadNumber(input,index);
     if (op2.message) return op2;
@@ -119,7 +119,7 @@ function evl(src,args)
       {
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
-        case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
+        case "jnz": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
       }
       i+=1n;
     }
@@ -145,16 +145,16 @@ else
   let $input = document.getElementById("input");
   $source.textContent = `// r0=r0+r1
 // function add(a,b) { if(a) return add(dec(a),inc(b)); else return b; }
-ifj 0 4 // if(a) 
-ifj 1 7
+jnz 0 4 // if(a) 
+jnz 1 7
 inc 2
-ifj 2 10
+jnz 2 10
 dec 0   // dec(a)
 inc 1   // inc(b)
-ifj 0 4 // if(a) return add(dec(a),inc(b))
+jnz 0 4 // if(a) return add(dec(a),inc(b))
 dec 1   // return b
 inc 0
-ifj 1 7
+jnz 1 7
 `;
   $input.value = "4 2";
   let $output = document.getElementById("output");
