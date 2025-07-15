@@ -107,7 +107,7 @@ function evl(src,args)
     let [l,c] = ast.lineandcolumn;
     return "syntax error: " + ast.message + " at " + l + "," + c;
   }
-  else
+  try
   {
     let regs = args;
     let i=0n;
@@ -125,22 +125,19 @@ function evl(src,args)
     }
     return regs[0];
   }
+  catch(e)
+  {
+    return('runtime error: ' + e.message);
+  }
 }
 
 if(typeof(window)==="undefined") 
 {
-  try
-  {
-    let fs = require("fs");
-    let source = fs.readFileSync(process.argv[2],"utf8").toString();
-    process.argv.splice(0,3);
-    let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
-    console.log(evl(source,args));
-  }
-  catch(e)
-  {
-    console.log('runtime error: ' + e.message);
-  }
+  let fs = require("fs");
+  let source = fs.readFileSync(process.argv[2],"utf8").toString();
+  process.argv.splice(0,3);
+  let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
+  console.log(evl(source,args));
 }
 else 
 {

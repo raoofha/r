@@ -168,7 +168,7 @@ function evl(src,args)
     let [l,c] = ast.lineandcolumn;
     return "syntax error: " + ast.message + " at " + l + "," + c;
   }
-  else
+  try
   {
     let regs = args;
     let i=0n;
@@ -176,13 +176,12 @@ function evl(src,args)
     while(i<ast.instructions.length)
     {
       let inst = ast.instructions[i]; 
-      //console.log(i,inst.name,regs,oldregs);
       switch(inst.name)
       {
         case "ifj": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
-        case "ret": return regs[inst.op1];
+        case "ret": return regs[inst.op1]||0n;
         case "set": regs[inst.op1] = regs[inst.op2]||0n; break;
         case "sub": regs[inst.op1] = tsb(regs[inst.op1]||0n,regs[inst.op2]||0n); break;
         case "mul": regs[inst.op1] = mul(regs[inst.op1]||0n,regs[inst.op2]||0n); break;
@@ -196,6 +195,10 @@ function evl(src,args)
       i+=1n;
     }
     return regs[0];
+  }
+  catch(e)
+  {
+    return('runtime error: ' + e.message);
   }
 }
 
@@ -223,24 +226,17 @@ if(typeof(window)==="undefined")
     return new Uint8Array(Array.from(Array(Number(l)).keys()).concat(r.reverse()));
     //return new Uint8Array(Array.from(Array(Number(l)).keys()).concat(r));
   }
-  try
-  {
-    let fs = require("fs");
-    let source = fs.readFileSync(process.argv[2],"utf8").toString();
-    process.argv.splice(0,3);
+  let fs = require("fs");
+  let source = fs.readFileSync(process.argv[2],"utf8").toString();
+  process.argv.splice(0,3);
 
-    //let args = process.argv.map((i)=> { try{ return fs.readFileSync(i); } catch(e) { return []; } }).map(_bytesToN);
-    //let out = evl(source,args);
-    //if(typeof(out)==="string") console.log(out);
-    //else process.stdout.write(_nToBytes(out));
+  //let args = process.argv.map((i)=> { try{ return fs.readFileSync(i); } catch(e) { return []; } }).map(_bytesToN);
+  //let out = evl(source,args);
+  //if(typeof(out)==="string") console.log(out);
+  //else process.stdout.write(_nToBytes(out));
 
-    let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
-    console.log(evl(source,args));
-  }
-  catch(e)
-  {
-    console.log('runtime error: ' + e.message);
-  }
+  let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
+  console.log(evl(source,args));
 }
 else 
 {
