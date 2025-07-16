@@ -163,11 +163,7 @@ function parse(source)
 function evl(src,args)
 {
   let ast = parse(src);
-  if(ast.message) 
-  {
-    let [l,c] = ast.lineandcolumn;
-    return "syntax error: " + ast.message + " at " + l + "," + c;
-  }
+  if(ast.message) return "syntax error: " + ast.message + " at " + ast.lineandcolumn;
   try
   {
     let regs = args;
@@ -194,7 +190,7 @@ function evl(src,args)
       }
       i+=1n;
     }
-    return regs[0];
+    return regs[0]||0n;
   }
   catch(e)
   {
