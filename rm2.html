@@ -239,15 +239,14 @@ else
   let $source = document.getElementById("source");
   let $input = document.getElementById("input");
   $source.textContent = `// r0=r0+r1
-// function add(a,b) { if(a) return add(dec(a),inc(b)); else return b; }
-jnz 0 4 // if(a) 
+jnz 0 4
 jnz 1 7
 inc 2
 jnz 2 10
-dec 0   // dec(a)
-inc 1   // inc(b)
-jnz 0 4 // if(a) return add(dec(a),inc(b))
-dec 1   // return b
+dec 0
+inc 1
+jnz 0 4
+dec 1
 inc 0
 jnz 1 7
 `;
