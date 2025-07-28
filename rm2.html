@@ -174,7 +174,7 @@ function evl(src,args)
       let inst = ast.instructions[i]; 
       switch(inst.name)
       {
-        case "jnz": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
+        case "jnz": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs]; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "ret": return regs[inst.op1]||0n;
