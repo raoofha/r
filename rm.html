@@ -113,9 +113,9 @@ function evl(src,args)
       let inst = ast.instructions[i]; 
       switch(inst.name)
       {
+        case "jnz": if(regs[inst.op1]) { if(inst.op2<=i&&regs[inst.op1]>=oldregs[inst.op1]) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs]; break;
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
-        case "jnz": if(regs[inst.op1]) { if(inst.op2===i||(inst.op2<i&&regs[inst.op1]>=oldregs[inst.op1])) return ""; oldregs = [...regs]; i = inst.op2; continue; } oldregs = [...regs];
       }
       i+=1n;
     }
@@ -133,23 +133,20 @@ if(typeof(window)==="undefined")
   let source = fs.readFileSync(process.argv[2],"utf8").toString();
   process.argv.splice(0,3);
   let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
-  console.log(evl(source,args));
+  let r = evl(source,args);
+  if(r!=="") console.log(r);
 }
 else 
 {
   let $source = document.getElementById("source");
   let $input = document.getElementById("input");
   $source.textContent = `// r0=r0+r1
-jnz 0 4
-jnz 1 7
+jnz 1 3
 inc 2
-jnz 2 10
-dec 0
-inc 1
-jnz 0 4
+jnz 2 6
 dec 1
 inc 0
-jnz 1 7
+jnz 1 3
 `;
   $input.value = "";
   let $output = document.getElementById("output");
@@ -158,7 +155,8 @@ jnz 1 7
   function run(e) 
   {
     let source = $source.value;
-    $output.textContent = evl(source,$input.value.split(" ").filter((e)=>e!=="").map((e)=> { try{ let r = BigInt(e); return (r<0n)?-r:r; }catch(e){ return 0n; } }));
+    $output.textContent = "computing...";
+    setTimeout(function(){$output.textContent = evl(source,$input.value.split(" ").filter((e)=>e!=="").map((e)=> { try{ let r = BigInt(e); return (r<0n)?-r:r; }catch(e){ return 0n; } }));},0);
   }
   $run.addEventListener("click",run);
   $source.addEventListener("keydown",function(e) { if(e.keyCode == 13 && e.ctrlKey) { run(e); } });
