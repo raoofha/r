@@ -1,0 +1,168 @@
+#!/usr/bin/node
+//; xterm-send "echo -ne \"\\033c\"; node $0 rm.rm 4 2" ; exit 1 ;
+
+//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><input type="text" id="input" placeholder="r0 r1 r2 ... // registers initial values" style="width:100%; height:auto;"></input><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+
+function parserReadShebang(input)
+{
+  if (input.startsWith("#!"))
+  {
+    let end = input.indexOf("\n", index);
+    if (end === -1) end = input.length;
+    return end;
+  }
+  return 0;
+}
+
+function parserSkipSpace(input,index)
+{
+  while (true)
+  {
+    const space = /[ \t\r\n]/.exec(input.slice(index));
+    const commentLine = /^\/\/[^\n\r]*/.exec(input.slice(index));
+    const commentBlock = /^\/\*(?:[^*]|\*(?!\/))*\*\//.exec(input.slice(index));
+    if (space && space.index === 0) index++;
+    else if (commentLine && commentLine.index === 0) index += commentLine[0].length;
+    else if (commentBlock && commentBlock.index === 0) index += commentBlock[0].length;
+    else return index;
+  }
+}
+
+function parserReadNumber(input,index)
+{
+  index = parserSkipSpace(input,index);
+  const match = /^0|[1-9][0-9]*/.exec(input.slice(index));
+  if (match)
+  {
+    index += match[0].length;
+    return { type: "number", value: match[0], index };
+  }
+  return {message: "expected a number", index};
+}
+
+function parserReadInstruction(input,index)
+{
+  index = parserSkipSpace(input,index);
+  if (!(input.startsWith("inc", index)||input.startsWith("dec", index)||input.startsWith("jnz", index))) return {message: `expect 'inc' 'dec' or 'jnz'`, index};
+  const name = input.substring(index,index+3);
+  index += 3;
+  let op1 = parserReadNumber(input,index);
+  if (op1.message) return op1;
+  index = parserSkipSpace(input,op1.index);
+  let op2;
+  if(name==="jnz")
+  {
+    op2 = parserReadNumber(input,index);
+    if (op2.message) return op2;
+    index = parserSkipSpace(input,op2.index);
+  }
+  return {
+    type: "Instruction",
+    name,
+    op1:BigInt(op1.value),
+    op2:BigInt(op2?op2.value?op2.value:0n:0n),
+    index,
+  };
+}
+
+function parserReadProgram(input)
+{
+  let index = 0;
+  index = parserReadShebang(input);
+  index = parserSkipSpace(input,index);
+  let instructions = [];
+  while(index<input.length)
+  {
+    const f = parserReadInstruction(input,index);
+    if (f.message) return f;
+    instructions.push(f);
+    index = f.index;
+  }
+  return {
+    type: "Program",
+    instructions,
+  };
+}
+
+function parserGetLineAndColumn(input,index)
+{
+  let src = input.substring(0,index+1);
+  let l = src.split('\n').length;
+  let c = src.length-src.lastIndexOf('\n')-1;
+  return [l,c];
+}
+
+function parse(source)
+{
+  let ast = parserReadProgram(source);
+  if(ast.message) { ast.lineandcolumn = parserGetLineAndColumn(source,ast.index); return ast; }
+  return ast;
+}
+
+function evl(src,args)
+{
+  let ast = parse(src);
+  if(ast.message) return "syntax error: " + ast.message + " at " + ast.lineandcolumn;
+  try
+  {
+    let regs = args;
+    let i=0n;
+    while(i<ast.instructions.length)
+    {
+      let inst = ast.instructions[i]; 
+      switch(inst.name)
+      {
+        case "jnz": if(regs[inst.op1]) { i = inst.op2; continue; } break;
+        case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
+        case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
+      }
+      i+=1n;
+    }
+    return regs[0]||0n;
+  }
+  catch(e)
+  {
+    return('runtime error: ' + e.message);
+  }
+}
+
+if(typeof(window)==="undefined") 
+{
+  let fs = require("fs");
+  let source = fs.readFileSync(process.argv[2],"utf8").toString();
+  process.argv.splice(0,3);
+  let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
+  let r = evl(source,args);
+  if(r!=="") console.log(r);
+}
+else 
+{
+  let $source = document.getElementById("source");
+  let $input = document.getElementById("input");
+  $source.textContent = `// r0=r0+r1
+jnz 1 3
+inc 2
+jnz 2 6
+dec 1
+inc 0
+jnz 1 3
+`;
+  $input.value = "";
+  let $output = document.getElementById("output");
+  let $run = document.getElementById("run");
+  let $livepreview = document.getElementById("livepreview");
+  function run(e) 
+  {
+    let source = $source.value;
+    $output.textContent = "computing...";
+    setTimeout(function(){$output.textContent = evl(source,$input.value.split(" ").filter((e)=>e!=="").map((e)=> { try{ let r = BigInt(e); return (r<0n)?-r:r; }catch(e){ return 0n; } }));},0);
+  }
+  $run.addEventListener("click",run);
+  $source.addEventListener("keydown",function(e) { if(e.keyCode == 13 && e.ctrlKey) { run(e); } });
+  $input.addEventListener("keydown",function(e) { if(e.keyCode == 13) { run(e); } });
+  $livepreview.addEventListener("change", function(e) { if(e.target.checked) { $source.addEventListener("keyup", run); $input.addEventListener("keyup", run); } else { $source.removeEventListener("keyup", run); run(e); $input.removeEventListener("keyup", run); } run(e); });
+  $livepreview.checked = true;
+  $livepreview.dispatchEvent(new Event("change"));
+}
+
+//</script></body>
