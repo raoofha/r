@@ -45,7 +45,7 @@ function parserReadShebang(input)
 {
   if (input.startsWith("#!"))
   {
-    let end = input.indexOf("\n", index);
+    let end = input.indexOf("\n", 0);
     if (end === -1) end = input.length;
     return end;
   }
