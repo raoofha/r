@@ -357,37 +357,6 @@ function transpile(src)
   return rewriteFunctionCalls(ast);
 }
 
-function _toRM(node,fname)
-{
-  switch (node.type)
-  {
-    case 'Program': return node.functions.map(_toRM).filter((e)=>e!=="").join('\n');
-    case 'BigIntLiteral': return node.value;
-    case 'Identifier': return node.name;
-    case 'CallExpression':
-      const args = node.arguments.map((e)=>_toRM(e,fname)).join(', ');
-      if(node.name!==fname) return `${node.name}(${args})`;
-      return `r(${args})`;
-    case 'ReturnStatement':
-      return 'return ' + _toRM(node.argument,fname) + ';'
-    case 'IfStatement':
-      return 'if(' + _toRM(node.test,fname) + ') ' + _toRM(node.then,fname) + ' else ' + _toRM(node._else,fname);
-    case 'FunctionDeclaration':
-      return "function " + node.name + "(" + node.params + ")" + " { " + _toRM(node.body,node.name) + " }" ;
-    case '': 
-      return "";
-    default:
-      throw new Error(`Unknown compiletime error: ${node.type}`);
-  }
-}
-
-function toRM(src)
-{
-  let ast = parse(src);
-  if(ast.message) return ast;
-  return _toRM(ast);
-}
-
 function evl(src,args)
 {
   let newsource = transpile(src);
