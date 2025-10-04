@@ -1,7 +1,41 @@
 #!/usr/bin/node
-//; xterm-send "echo -ne \"\\033c\"; node $0 rm.rm 4 2" ; exit 1 ;
+//; xterm-send "echo -ne \"\\033c\"; node $0 rm.rm" ; exit 1 ;
 
-//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><input type="text" id="input" placeholder="r0 r1 r2 ... // registers initial values" style="width:100%; height:auto;"></input><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+//<body style="overflow: scroll; font-family: monospace;"><button id="run">run</button><input type="checkbox" id="livepreview" style="vertical-align: middle;"><label for="livepreview">live preview</label><input type="text" id="input0" placeholder="r0" style="width:100%; height:auto;"></input><input type="text" id="input1" placeholder="r1" style="width:100%; height:auto;"></input><textarea id="source" style="width:100%; height:80%; white-space: pre;"></textarea><div id="output" style="line-break: anywhere;"></div><script>window.addEventListener("load",function() { document.body.childNodes[0].textContent = ""; });
+
+function unpair(n) { let a=0n; n+=1n; while(!(n%2n)) { n = n/2n; a += 1n; } return [a,(n-1n)/2n]; }
+function pair(a,b) { return 2n**a*(2n*b+1n)-1n; }
+
+function bytesToN(s)
+{
+  let r = 0n;
+  let z = 0n;
+  //for(let i=0;i<s.length;i+=1) r += BigInt(s[i])*256n**BigInt(s.length-i-1);
+  ////for(let i=0n;i<s.length;i+=1n) r += BigInt(s[i])*256n**i;
+  //for(let i=0;i<s.length&&s[i]==0;i+=1) z += 1n;
+  for(let i=0;i<s.length;i+=1) r += BigInt(s[i])*256n**BigInt(i);
+  for(let i=s.length-1;i>=0&&s[i]==0;i-=1) z += 1n;
+  return pair(z,r);
+}
+function nToBytes(n)
+{
+  let [l,m] = unpair(n);
+  let r = [];
+  let k = m;
+  while(k) 
+  {
+    r.push(Number(k%256n));
+    k = k/256n;
+  }
+  //return new Uint8Array(Array.from(Array(Number(l)).keys()).concat(r.reverse()));
+  ////return new Uint8Array(Array.from(Array(Number(l)).keys()).concat(r));
+  return new Uint8Array(r.concat(Array(Number(l)).fill(0)));
+}
+
+let utf8Encode = new TextEncoder();
+let utf8Decode = new TextDecoder();
+function stringToN(s) { return bytesToN(utf8Encode.encode(s)); }
+function nToString(n) { return utf8Decode.decode(nToBytes(n)); }
 
 function parserReadShebang(input)
 {
@@ -105,22 +139,44 @@ function rm(src,...args)
   if(ast.message) return "syntax error: " + ast.message + " at " + ast.lineandcolumn;
   try
   {
-    let regs = args;
+    let regs = args.map(stringToN);
     let i=0n;
     let oldregs=[...regs];
     let lastjump = 0n;
     while(i<ast.instructions.length)
     {
+      let inst = ast.instructions[i];
+      if(inst.name==="jnz") 
+      {
+        if(inst.op2<lastjump||inst.op2>=ast.instructions.length) return "syntax error: wrong jump to " + inst.op2 + " at " + i;
+        if(inst.op2<=i) lastjump = i;
+      }
+      i+=1n;
+    }
+    i=0n;
+    WHILE:
+    while(i<ast.instructions.length)
+    {
       let inst = ast.instructions[i]; 
       switch(inst.name)
       {
-        case "jnz": if(regs[inst.op1]) { if(inst.op2<=i&&((regs[inst.op1]||0n)>=(oldregs[inst.op1]||0n))) return ""; if(inst.op2<=i) oldregs = [...regs]; i = inst.op2; continue; } break;
+        case "jnz": 
+        {
+          if(regs[inst.op1]) 
+          {
+            if(inst.op2<=i&&((regs[inst.op1]||0n)>=(oldregs[inst.op1]||0n))) break WHILE;
+            if(inst.op2<=i) oldregs = [...regs];
+            i = inst.op2;
+            continue;
+          }
+          break;
+        }
         case "inc": if(regs[inst.op1]) regs[inst.op1]++; else regs[inst.op1] = 1n; break;
         case "dec": if(regs[inst.op1]) regs[inst.op1]--; break;
       }
       i+=1n;
     }
-    return regs[0]||0n;
+    return nToString(regs[0]||0n);
   }
   catch(e)
   {
@@ -130,53 +186,47 @@ function rm(src,...args)
 
 if(typeof(window)==="undefined") 
 {
-  if (require.main === module)
+  try
   {
     let fs = require("fs");
     let source = fs.readFileSync(process.argv[2],"utf8").toString();
     process.argv.splice(0,3);
-    let args = process.argv.map((i)=> { try{ let r = BigInt(i); return r<0n?-r:r; } catch(e) { return 0n; } });
-    let r = rm(source,...args);
-    if(r!=="") console.log(r);
+    let args = process.argv.map((i)=> { try{ return fs.readFileSync(i); } catch(e) { return ""; } });
+    process.stdout.write(rm(source,...args));
   }
-  else
+  catch(e)
   {
-    module.exports = rm;
+    process.stdout.write('runtime error: ' + e.message);
   }
 }
 else 
 {
   let $source = document.getElementById("source");
-  let $input = document.getElementById("input");
-  $source.textContent = `// not yet a total language but close enough (see https://raoofha.github.io/r/r.html for a total [and turing complete!?] language) , 
-// to make it total you have to:
-// 1. translate the program into a Diophantine equation ∃y,z1,...,zn[F(x,y,z1,...,zn)=0] and then
-// 2. translate that to ∃w[F(x,p0(w),p1(w),...,pn(w))=0] where pi is ith element of a pairing function
-// 3. isolate w to get w=f(x) and y=p0(f(x))
-// 4. return y if f(x) is defined otherwise return empty string
-
-// r0=r0+r1
+  let $input0 = document.getElementById("input0");
+  let $input1 = document.getElementById("input1");
+  $source.textContent = `
 jnz 1 3
 inc 2
-jnz 2 6
+jnz 2 2
 dec 1
 inc 0
 jnz 1 3
 `;
-  $input.value = "";
+  $input0.value = "";
+  $input1.value = "";
   let $output = document.getElementById("output");
   let $run = document.getElementById("run");
   let $livepreview = document.getElementById("livepreview");
   function run(e) 
   {
     let source = $source.value;
-    $output.textContent = "computing...";
-    setTimeout(function(){$output.textContent = rm(source,...$input.value.split(" ").filter((e)=>e!=="").map((e)=> { try{ let r = BigInt(e); return (r<0n)?-r:r; }catch(e){ return 0n; } }));},0);
+    $output.textContent = rm(source,$input0.value,$input1.value);
   }
   $run.addEventListener("click",run);
   $source.addEventListener("keydown",function(e) { if(e.keyCode == 13 && e.ctrlKey) { run(e); } });
-  $input.addEventListener("keydown",function(e) { if(e.keyCode == 13) { run(e); } });
-  $livepreview.addEventListener("change", function(e) { if(e.target.checked) { $source.addEventListener("keyup", run); $input.addEventListener("keyup", run); } else { $source.removeEventListener("keyup", run); run(e); $input.removeEventListener("keyup", run); } run(e); });
+  $input0.addEventListener("keydown",function(e) { if(e.keyCode == 13) { run(e); } });
+  $input1.addEventListener("keydown",function(e) { if(e.keyCode == 13) { run(e); } });
+  $livepreview.addEventListener("change", function(e) { if(e.target.checked) { $source.addEventListener("keyup", run); $input0.addEventListener("keyup", run); $input1.addEventListener("keyup", run); } else { $source.removeEventListener("keyup", run); run(e); $input0.removeEventListener("keyup", run); $input1.removeEventListener("keyup", run); } run(e); });
   $livepreview.checked = true;
   $livepreview.dispatchEvent(new Event("change"));
 }
