@@ -14,7 +14,7 @@ N _r(void* f,N k,N* args)
   if(k==0) return 0;
   if(k==1) return args[0]+1;
   if(args[0]) return __r(args[0]-1,args[1],args[2]);
-  N arg1 = (*(N*)(__builtin_frame_address(1)+2));
+  N arg1 = (*(N*)(((void**)__builtin_frame_address(1))+2));
   if(arg1>args[1]) 
   {
     switch(k)
@@ -56,8 +56,8 @@ N gt(N a,N b) { return not(lte(a,b)); }
 N gte(N a,N b) { return not(lt(a,b)); }
 
 N _root_mid(N l,N h) { return div(inc(add(l,h)),2); }
-N _root(N a,N b,N l,N h) { return If(gte(l,h),l,If(lte(pow(_root_mid(l,h),b),a),r(0,a,b,_root_mid(l,h),h),r(0,a,b,l,dec(_root_mid(l,h))))); }
-N root(N a,N b) { return _root(a,b,0,a); }
+N _root(N n,N a,N b,N l,N h) { return If(gte(l,h),l,If(lte(pow(_root_mid(l,h),b),a),r(0,dec(n),a,b,_root_mid(l,h),h),r(0,dec(n),a,b,l,dec(_root_mid(l,h))))); }
+N root(N a,N b) { return _root(a,a,b,0,a); }
 
 N _mypow(N b,N a) { return If(eq(b,0),1,If(eq(b,1),a,mul(a,r(0,dec(b),a)))); }
 N mypow(N a,N b) { return _mypow(b,a); }
