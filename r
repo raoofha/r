@@ -1,10 +1,11 @@
 #if 0
 read -r -d '' r << EOF
-LIMIT = 2**30
 import inspect
 import sys
 import resource
 import operator
+import os
+LIMIT = operator.floordiv(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"),16)
 resource.setrlimit(resource.RLIMIT_STACK, (8*LIMIT,-1))
 sys.setrecursionlimit(LIMIT)
 sys.set_int_max_str_digits(LIMIT)
