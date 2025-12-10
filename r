@@ -30,15 +30,25 @@ def r(*xs):
   if n==7: return a**b
   if n > 6 and b==0: return 1
   return r(n-1,a,r(n,a,b-1))
-def _toN(x):
-  try:
-    return int(x)
-  except:
-    return 0
+def _main():
+  def _toN(x):
+    try:
+      return int(x)
+    except:
+      return 0
+  funcs = []
+  for name, obj in globals().items():
+    if inspect.isfunction(obj):
+      funcs.append((obj.__code__.co_firstlineno, obj))
+  if not funcs:
+    return None
+  funcs.sort(key=lambda x: x[0])
+  main = funcs[-1][1]
+  return main(*[_toN(sys.argv[i+1]) if i < len(sys.argv)-1 else 0 for i,x in enumerate([0]*len(inspect.signature(main).parameters))])
 #define if(a,b,c) ((b) if (a) else (c))
 #define fn(name,body) def name: return body
 EOF
-tcc -E -x c -P -C <(echo "$r"; cat $0; echo -e "print(main(*[_toN(sys.argv[i+1]) if i < len(sys.argv)-1 else 0 for i,x in enumerate([0]*len(inspect.signature(main).parameters))]));") |
+tcc -E -x c -P -C <(echo "$r"; cat $0; echo -e "print(_main())") |
 python3 - "$@"
 exit
 #endif
@@ -92,7 +102,3 @@ fn(gcd(a,b),if(b,r(1,b,rem(a,b)),a))
 
 fn(_nthPrime(b,i,n),if(n,if(isPrime(i),r(1,dec(b),inc(i),dec(n)),r(1,dec(b),inc(i),n)),dec(i)))
 fn(nthPrime(n),_nthPrime(mul(n,n),2,n))
-
-fn(f(a),r(1,tsb(a,1)))
-
-fn(main(a),nthPrime(a))
