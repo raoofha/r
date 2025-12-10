@@ -33,7 +33,7 @@ def r(*xs):
 def _main():
   def _toN(x):
     try:
-      return int(x)
+      return int(x,0)
     except:
       return 0
   funcs = []
