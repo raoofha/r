@@ -48,7 +48,7 @@ def _main():
 #define if(a,b,c) ((b) if (a) else (c))
 #define fn(name,body) def name: return body
 EOF
-tcc -E -x c -P -C <(echo "$r"; cat $0; echo -e "print(_main())") |
+gcc -E -x c -P <(echo "$r"; cat $0; echo -e "print(_main())") |
 python3 - "$@"
 exit
 #endif
