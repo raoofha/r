@@ -19,7 +19,6 @@ def r(*xs):
   frame = inspect.currentframe().f_back
   caller_locals = frame.f_locals
   caller_args = [frame.f_locals[arg_name] for arg_name in frame.f_code.co_varnames[:frame.f_code.co_argcount]]
-  if l>1 and n>sys.getrecursionlimit()/5: sys.setrecursionlimit(n*5)
   if n==0: return caller_args[a]
   if n==1 and caller_args[0]>a: return globals().get(frame.f_code.co_name)(*xs[1:])
   if n==1: return 0
