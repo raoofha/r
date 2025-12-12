@@ -1,3 +1,4 @@
+#!/usr/bin/bash
 #if 0
 read -r -d '' r << EOF
 import inspect
@@ -48,7 +49,7 @@ def _main():
 #define if(a,b,c) ((b) if (a) else (c))
 #define fn(name,body) def name: return body
 EOF
-gcc -E -x c -P <(echo "$r"; cat $0; echo -e "print(_main())") |
+gcc -E -x c -P <(echo "$r"; tail -n +2 $0; echo -e "print(_main())") |
 python3 - "$@"
 exit
 #endif
@@ -86,8 +87,10 @@ fn(_root_mid(l,h),div(inc(add(l,h)),2))
 fn(_root(n,a,b,l,h),if(gte(l,h),l,if(lte(pow(_root_mid(l,h),b),a),r(1,dec(n),a,b,_root_mid(l,h),h),r(1,dec(n),a,b,l,dec(_root_mid(l,h))))))
 fn(root(a,b),_root(a,a,b,0,a))
 
-fn(_mytsb(b,a),if(b,dec(r(1,dec(b),a)),a))
+fn(_mytsb(b,a),if(b,r(1,dec(b),dec(a)),a))
 fn(mytsb(a,b),_mytsb(b,a))
+
+fn(myadd(a,b),if(a,r(1,dec(a),inc(b)),b))
 
 fn(_mydiv(b,n,d,q),if(lt(b,d),q,r(1,tsb(b,d),n,d,inc(q))))
 fn(mydiv(a,b),_mydiv(a,a,b,0))
