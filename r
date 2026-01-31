@@ -47,7 +47,7 @@ def _main():
   main = funcs[-1][1]
   o = main(*[_toN(sys.argv[i+1]) if i < len(sys.argv)-1 else 0 for i,x in enumerate([0]*len(inspect.signature(main).parameters))])
   return 0 if o!=o else o
-#define if(a,b,c) ((b) if (a) else (c))
+#define if(a,b,c) (a if a!=a else ((b) if (a) else (c)))
 #define fn(name,body) def name: return body
 EOF
 gcc -E -x c -P <(echo "$r"; tail -n +2 $0; echo -e "print(_main())") |
