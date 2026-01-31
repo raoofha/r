@@ -22,7 +22,7 @@ def r(*xs):
   caller_args = [frame.f_locals[arg_name] for arg_name in frame.f_code.co_varnames[:frame.f_code.co_argcount]]
   if n==0: return caller_args[a]
   if n==1 and caller_args[0]>a: return globals().get(frame.f_code.co_name)(*xs[1:])
-  if n==1: return 0
+  if n==1: return float("nan")
   if n==2: return operator.floordiv(a,b) if b else 0 # return a//b if b else 0
   if n==3: return a-b if a>b else 0
   if n==4: return b+1
@@ -45,7 +45,8 @@ def _main():
     return None
   funcs.sort(key=lambda x: x[0])
   main = funcs[-1][1]
-  return main(*[_toN(sys.argv[i+1]) if i < len(sys.argv)-1 else 0 for i,x in enumerate([0]*len(inspect.signature(main).parameters))])
+  o = main(*[_toN(sys.argv[i+1]) if i < len(sys.argv)-1 else 0 for i,x in enumerate([0]*len(inspect.signature(main).parameters))])
+  return 0 if o!=o else o
 #define if(a,b,c) ((b) if (a) else (c))
 #define fn(name,body) def name: return body
 EOF
