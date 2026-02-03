@@ -102,7 +102,7 @@ fn(mypow(a,b),_mypow(b,a))
 fn(_isPrime(i,n),if(lt(i,2),1,if(isDivisible(n,i),0,r(1,dec(i),n))))
 fn(isPrime(n),if(n,_isPrime(dec(n),n),0))
 
-fn(gcd(a,b),if(b,r(1,b,rem(a,b)),a))
+fn(gcd(a,b),if(eq(a,b),a,if(b,r(1,b,rem(a,b)),a)))
 
 fn(_nthPrime(b,i,n),if(n,if(isPrime(i),r(1,dec(b),inc(i),dec(n)),r(1,dec(b),inc(i),n)),dec(i)))
 fn(nthPrime(n),_nthPrime(mul(n,n),2,n))
